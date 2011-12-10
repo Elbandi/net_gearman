@@ -68,6 +68,7 @@ class Net_Gearman_Connection
         'work_status' => array(12, array('handle', 'numerator', 'denominator')),
         'work_complete' => array(13, array('handle', 'result')),
         'work_fail' => array(14, array('handle')),
+        'work_exception' => array(25, array('handle', 'exceptions')),
         'get_status' => array(15, array('handle')),
         'status_res' => array(20, array('handle', 'known', 'running', 'numerator', 'denominator')),
         'echo_req' => array(16, array('text')),

@@ -99,11 +99,13 @@ class Net_Gearman_Worker
      * @see Net_Gearman_Worker::JOB_START
      * @see Net_Gearman_Worker::JOB_COMPLETE
      * @see Net_Gearman_Worker::JOB_FAIL
+     * @see Net_Gearman_Worker::JOB_EXCEPTION
      */
     protected $callback = array(
         self::JOB_START     => array(),
         self::JOB_COMPLETE  => array(),
-        self::JOB_FAIL      => array()
+        self::JOB_FAIL      => array(),
+        self::JOB_EXCEPTION => array()
     );
 
     /**
@@ -117,13 +119,15 @@ class Net_Gearman_Worker
     /**
      * Callback types
      *
-     * @const integer JOB_START    Ran when a job is started
-     * @const integer JOB_COMPLETE Ran when a job is finished
-     * @const integer JOB_FAIL     Ran when a job fails
+     * @const integer JOB_START      Ran when a job is started
+     * @const integer JOB_COMPLETE   Ran when a job is finished
+     * @const integer JOB_FAIL       Ran when a job fails
+     * @const integer JOB_EXCEPTION  Ran when a job fails with an exception
      */
-    const JOB_START    = 1;
-    const JOB_COMPLETE = 2;
-    const JOB_FAIL     = 3;
+    const JOB_START     = 1;
+    const JOB_COMPLETE  = 2;
+    const JOB_FAIL      = 3;
+    const JOB_EXCEPTION = 4;
 
     /**
      * Constructor
@@ -433,6 +437,26 @@ class Net_Gearman_Worker
         }
 
         foreach ($this->callback[self::JOB_FAIL] as $callback) {
+            call_user_func($callback, $handle, $job, $error);
+        }
+    }
+
+    /**
+     * Run the exception callbacks
+     *
+     * @param string $handle The job's Gearman handle
+     * @param string $job    The name of the job
+     * @param object $error  The exception thrown
+     * 
+     * @return void
+     */
+    protected function exception($handle, $job, PEAR_Exception $error)
+    {
+        if (!count($this->callback[self::JOB_EXCEPTION])) {
+            return; // No callbacks to run
+        }
+
+        foreach ($this->callback[self::JOB_EXCEPTION] as $callback) {
             call_user_func($callback, $handle, $job, $error);
         }
     }

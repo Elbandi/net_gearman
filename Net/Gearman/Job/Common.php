@@ -138,6 +138,24 @@ abstract class Net_Gearman_Job_Common
             'handle' => $this->handle
         ));
     }
+
+    /**
+     * Mark your job as failing with an exception
+     *
+     * If your job fails for some reason (e.g. a query fails) you need to run
+     * this function and exit from your run() method. This will tell Gearman
+     * (and the client by proxy) that the job has failed with exception.
+     *
+     * @return void
+     * @see Net_Gearman_Connection::send()
+     */
+    public function exception($exception)
+    {
+        Net_Gearman_Connection::send($this->conn, 'work_exception', array(
+            'handle' => $this->handle,
+            'exception' => $exception->getMessage()
+        ));
+    }
 }
 
 ?>
