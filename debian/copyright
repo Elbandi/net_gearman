@@ -1,0 +1,19 @@
+This package was debianized by Andras Elso <elso.andras@gmail.com> using dh-make-pear
+on Wed, 30 Nov 2011 00:27:50 +0100.
+
+It was downloaded from http://pear.php.net/package/Net_Gearman
+
+Upstream Author(s):
+
+    Joe Stump, Chris Goffinet, Brian Moon
+
+Copyright:
+
+    Copyright (C) 2009 Joe Stump, Chris Goffinet, Brian Moon
+
+License:
+
+    New BSD License
+
+The Debian packaging is copyright 2009, Andras Elso <elso.andras@gmail.com> and
+is licensed under the GPL, see `/usr/share/common-licenses/GPL'.

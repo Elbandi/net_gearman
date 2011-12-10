@@ -1,0 +1,7 @@
+php-net-gearman for Debian
+--------------------------
+
+This extension has been created with dh-make-pear which is part
+of dh-make-php.
+
+ -- Andras Elso <elso.andras@gmail.com>, Wed, 30 Nov 2011 00:27:50 +0100

@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+# template debian/rules provided by dh-make-php.
+
+DEB_COMPRESS_EXCLUDE=package.xml
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/pear.mk
+
+makebuilddir::
+	mkdir -p Net_Gearman-0.2.3
+	cp -al Net tests examples Net_Gearman-0.2.3
+
+cleanbuilddir::
+	rm -rf Net_Gearman-0.2.3

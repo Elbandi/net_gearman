@@ -1,0 +1,15 @@
+Source: php-net-gearman
+Section: web
+Priority: optional
+Maintainer: Andras Elso <elso.andras@gmail.com>
+Build-Depends: debhelper (>= 7), dh-make-php (>= 0.2.3), cdbs
+Standards-Version: 3.8.1
+
+Package: php-net-gearman
+Architecture: all
+Depends: 
+Description: A PHP interface to Danga's Gearman
+ Gearman (http://www.danga.com/gearman) is a system to farm out work
+ to other machines. It can load balance function calls to lots of
+ machines and allows you to call functions between languages. It
+ can also run all function calls in parallel.
