@@ -350,8 +350,11 @@ class Net_Gearman_Worker
             $job->complete($res);
             $this->complete($handle, $name, $res);
         } catch (Net_Gearman_Job_Exception $e) {
-            $job->fail(); 
-            $this->fail($handle, $name, $e); 
+            $job->exception($e);
+            $this->exception($handle, $name, $e);
+        } catch (Exception $e) {
+            $job->fail();
+            $this->fail($handle, $name, $e);
         }
 
         // Force the job's destructor to run
