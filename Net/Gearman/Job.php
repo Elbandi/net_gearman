@@ -69,7 +69,7 @@ abstract class Net_Gearman_Job
     static public function factory($job, $conn, $handle, $initParams=array())
     {
         $file = NET_GEARMAN_JOB_PATH . '/' . $job . '.php';
-        include_once $file;
+        if (file_exists($file)) @include_once $file;
         $class = NET_GEARMAN_JOB_CLASS_PREFIX . $job;
         if (!class_exists($class)) {
             throw new Net_Gearman_Job_Exception('Invalid Job class');
