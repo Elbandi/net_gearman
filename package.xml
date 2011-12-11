@@ -72,6 +72,8 @@
                 </dir>
             </dir>
             <dir name="examples" role="doc" baseinstalldir="doc/Net_Gearman">
+                <file name="callbacks.php"
+                      role="doc" />
                 <file name="SQL.php"
                       role="doc" />
                 <file name="Sum.php"
@@ -88,8 +90,20 @@
                       role="test" /> 
                 <file name="012-client-runSet.phpt"
                       role="test" /> 
-                <file name="tests-config.php"
+                <file name="013-client-call-strict.phpt"
                       role="test" /> 
+                <file name="AllTests.php"
+                      role="test" /> 
+                <file name="tests-config.php-dist"
+                      role="test" /> 
+                <dir name="Net">
+                    <dir name="Gearman">
+                        <file name="ConnectionTest.php"
+                              role="test" /> 
+                        <file name="TaskTest.php"
+                              role="test" /> 
+                    </dir>
+                </dir>
             </dir>
         </dir>
     </contents>
