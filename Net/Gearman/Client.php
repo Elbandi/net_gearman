@@ -23,6 +23,7 @@
 
 require_once 'Net/Gearman/Connection.php';
 require_once 'Net/Gearman/Set.php';
+require_once 'Net/Gearman/Task.php';
 
 /**
  * A client for submitting jobs to Gearman
@@ -35,6 +36,7 @@ require_once 'Net/Gearman/Set.php';
  * @author    Joe Stump <joe@joestump.net> 
  * @copyright 2007-2008 Digg.com, Inc.
  * @license   http://www.opensource.org/licenses/bsd-license.php New BSD License
+ * @version   Release: @package_version@
  * @link      http://www.danga.com/gearman/
  */
 class Net_Gearman_Client
@@ -70,9 +72,11 @@ class Net_Gearman_Client
      * @throws Net_Gearman_Exception
      * @see Net_Gearman_Connection
      */
-    public function __construct($servers, $timeout = 1000)
+    public function __construct($servers = null, $timeout = 1000)
     {
-        if (!is_array($servers) && strlen($servers)) {
+        if (is_null($servers)){
+            $servers = array("localhost");
+        } elseif (!is_array($servers) && strlen($servers)) {
             $servers = array($servers);
         } elseif (is_array($servers) && !count($servers)) {
             throw new Net_Gearman_Exception('Invalid servers specified');
@@ -80,6 +84,10 @@ class Net_Gearman_Client
 
         $this->servers = $servers;
         foreach ($this->servers as $key => $server) {
+            $server = trim($server);
+            if(empty($server)){
+                throw new Net_Gearman_Exception('Invalid servers specified');
+            }
             $conn = Net_Gearman_Connection::connect($server, $timeout);
             if (!Net_Gearman_Connection::isConnected($conn)) {
                 unset($this->servers[$key]);
@@ -138,6 +146,15 @@ class Net_Gearman_Client
     protected function submitTask(Net_Gearman_Task $task)
     {
         switch ($task->type) {
+        case Net_Gearman_Task::JOB_LOW:
+            $type = 'submit_job_low';
+            break;
+        case Net_Gearman_Task::JOB_LOW_BACKGROUND:
+            $type = 'submit_job_low_bg';
+            break;
+        case Net_Gearman_Task::JOB_HIGH_BACKGROUND:
+            $type = 'submit_job_high_bg';
+            break;
         case Net_Gearman_Task::JOB_BACKGROUND:
             $type = 'submit_job_bg';
             break;
@@ -166,32 +183,61 @@ class Net_Gearman_Client
         $s = $this->getConnection();
         Net_Gearman_Connection::send($s, $type, $params);
 
-        if (!is_array(Net_Gearman_Connection::$waiting[$s])) {
-            Net_Gearman_Connection::$waiting[$s] = array();
+        if (!is_array(Net_Gearman_Connection::$waiting[(int)$s])) {
+            Net_Gearman_Connection::$waiting[(int)$s] = array();
         }
 
-        array_push(Net_Gearman_Connection::$waiting[$s], $task);
+        array_push(Net_Gearman_Connection::$waiting[(int)$s], $task);
     }
 
     /**
      * Run a set of tasks
      *
      * @param object $set A set of tasks to run
+     * @param int    $timeout Time in seconds for the socket timeout. Max is 10 seconds
      * 
      * @return void
      * @see Net_Gearman_Set, Net_Gearman_Task
      */
-    public function runSet(Net_Gearman_Set $set) 
+    public function runSet(Net_Gearman_Set $set, $timeout = null)
     {
         $totalTasks = $set->tasksCount;
         $taskKeys   = array_keys($set->tasks);
         $t          = 0;
 
+        if ($timeout !== null){
+            $socket_timeout = min(10, (int)$timeout);
+        } else {
+            $socket_timeout = 10;
+        }
+
         while (!$set->finished()) {
+
+            if ($timeout !== null) {
+
+                if (empty($start)) {
+
+                    $start = microtime(true);
+
+                } else {
+
+                    $now = microtime(true);
+
+                    if ($now - $start >= $timeout) {
+                        break;
+                    }
+                }
+
+            }
+
+
             if ($t < $totalTasks) {
                 $k = $taskKeys[$t];
                 $this->submitTask($set->tasks[$k]);
-                if ($set->tasks[$k]->type == Net_Gearman_Task::JOB_BACKGROUND) {
+                if ($set->tasks[$k]->type == Net_Gearman_Task::JOB_BACKGROUND ||
+                    $set->tasks[$k]->type == Net_Gearman_Task::JOB_HIGH_BACKGROUND ||
+                    $set->tasks[$k]->type == Net_Gearman_Task::JOB_LOW_BACKGROUND) {
+
                     $set->tasks[$k]->finished = true;
                     $set->tasksCount--;
                 }
@@ -202,7 +248,7 @@ class Net_Gearman_Client
             $write  = null;
             $except = null;
             $read   = $this->conn;
-            socket_select($read, $write, $except, 10);
+            socket_select($read, $write, $except, $socket_timeout);
             foreach ($read as $socket) {
                 $resp = Net_Gearman_Connection::read($socket);
                 if (count($resp)) {
@@ -244,7 +290,7 @@ class Net_Gearman_Client
             $task->fail();
             break;
         case 'job_created':
-            $task         = array_shift(Net_Gearman_Connection::$waiting[$s]);
+            $task         = array_shift(Net_Gearman_Connection::$waiting[(int)$s]);
             $task->handle = $resp['data']['handle'];
             if ($task->type == Net_Gearman_Task::JOB_BACKGROUND) {
                 $task->finished = true;

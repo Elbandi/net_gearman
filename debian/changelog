@@ -1,3 +1,9 @@
+php-net-gearman (0.2.3+git20110224.49acc38-1) unstable; urgency=low
+
+  * New upstream snapshot
+
+ -- Andras Elso <elso.andras@gmail.com>  Sun, 11 Dec 2011 01:07:02 +0100
+
 php-net-gearman (0.2.3-1) unstable; urgency=low
 
   * Initial Release.

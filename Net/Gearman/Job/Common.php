@@ -31,6 +31,7 @@ require_once 'Net/Gearman/Job/Exception.php';
  * @author    Joe Stump <joe@joestump.net> 
  * @copyright 2007-2008 Digg.com, Inc.
  * @license   http://www.opensource.org/licenses/bsd-license.php New BSD License
+ * @version   Release: @package_version@
  * @link      http://www.danga.com/gearman/
  * @see       Net_Gearman_Job_Common, Net_Gearman_Worker
  */
@@ -52,17 +53,24 @@ abstract class Net_Gearman_Job_Common
     protected $conn = null;
 
     /**
+     * Parameters for Job instantiation
+     * @var array $initParams
+     */
+
+    /**
      * Constructor
      *
      * @param resource $conn   Connection to communicate with
      * @param string   $handle Job ID / handle for this job
+     * @param array $initParams initialization parameters
      * 
      * @return void
      */
-    public function __construct($conn, $handle)
+    public function __construct($conn, $handle, array $initParams=array())
     {
         $this->conn   = $conn;
         $this->handle = $handle;
+        $this->initParams = $initParams;
     }
 
     /**

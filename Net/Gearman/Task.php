@@ -29,6 +29,7 @@
  * @author    Joe Stump <joe@joestump.net> 
  * @copyright 2007-2008 Digg.com, Inc.
  * @license   http://www.opensource.org/licenses/bsd-license.php New BSD License
+ * @version   Release: @package_version@
  * @link      http://www.danga.com/gearman/
  * @see       Net_Gearman_Set, Net_Gearman_Client
  */
@@ -59,6 +60,9 @@ class Net_Gearman_Task
      * @see Net_Gearman_Task::JOB_NORMAL
      * @see Net_Gearman_Task::JOB_BACKGROUND
      * @see Net_Gearman_Task::JOB_HIGH
+     * @see Net_Gearman_Task::JOB_HIGH_BACKGROUND
+     * @see Net_Gearman_Task::JOB_LOW
+     * @see Net_Gearman_Task::JOB_LOW_BACKGROUND
      */
     public $type = self::JOB_NORMAL;
 
@@ -144,7 +148,28 @@ class Net_Gearman_Task
      *
      * @var integer JOB_HIGH
      */
-    const JOB_HIGH = 2;
+    const JOB_HIGH = 3;
+
+    /**
+     * High priority, background job
+     *
+     * @var integer JOB_HIGH
+     */
+    const JOB_HIGH_BACKGROUND = 4;
+
+    /**
+     * LOW priority job
+     *
+     * @var integer JOB_LOW
+     */
+    const JOB_LOW = 5;
+
+    /**
+     * Low priority, background job
+     *
+     * @var integer JOB_LOW_BACKGROUND
+     */
+    const JOB_LOW_BACKGROUND = 6;
 
     /**
      * Callback of type complete
@@ -184,11 +209,12 @@ class Net_Gearman_Task
      * Constructor
      *
      * @param string  $func Name of job to run
-     * @param array   $arg  List of arguments for job
+     * @param mixed   $arg  List of arguments for job
      * @param string  $uniq The unique id of the job 
      * @param integer $type Type of job to run task as
      *
-     * @return      void
+     * @return Net_Gearman_Task
+     * @throws Net_Gearman_Exception
      */
     public function __construct($func, $arg, $uniq = null,
                                 $type = self::JOB_NORMAL) 
@@ -202,6 +228,13 @@ class Net_Gearman_Task
             $this->uniq = $uniq;
         }
 
+        $type = (int) $type;
+        if ($type > 6) {
+            throw new Net_Gearman_Exception(
+                "Unknown job type: {$type}. Please see Net_Gearman_Task::JOB_* constants."
+            );
+        }
+
         $this->type = $type; 
     }
 
@@ -211,16 +244,35 @@ class Net_Gearman_Task
      * @param callback $callback A valid PHP callback
      * @param integer  $type     Type of callback 
      * 
-     * @return void
-     * @throws Net_Gearman_Exception
+     * @return $this
+     * @throws Net_Gearman_Exception When the callback is invalid.
+     * @throws Net_Gearman_Exception When the callback's type is invalid.
      */
     public function attachCallback($callback, $type = self::TASK_COMPLETE) 
     {
         if (!is_callable($callback)) {
             throw new Net_Gearman_Exception('Invalid callback specified'); 
-        } 
+        }
+
+        if (!in_array(
+            $type,
+            array(self::TASK_COMPLETE, self::TASK_FAIL, self::TASK_STATUS)
+        )) {
+            throw new Net_Gearman_Exception('Invalid callback type specified');
+        }
 
         $this->callback[$type][] = $callback;
+        return $this;
+    }
+
+    /**
+     * Return all callbacks.
+     *
+     * @return array
+     */
+    public function getCallbacks()
+    {
+        return $this->callback;
     }
 
     /**
@@ -251,8 +303,7 @@ class Net_Gearman_Task
     /**
      * Run the failure callbacks
      *
-     * Failure callbacks are passed the name of the job and the handle of the
-     * job that failed (in that order).
+     * Failure callbacks are passed the task object job that failed
      *
      * @return void
      * @see Net_Gearman_Task::attachCallback()
@@ -296,5 +347,3 @@ class Net_Gearman_Task
         }
     }
 }
-
-?>

@@ -1,15 +1,14 @@
 --TEST--
-Net_Gearman_Client::__call()
---SKIPIF--
-<?php
-if (!file_exists(dirname(__FILE__) . '/tests-config.php')) {
-    die('skip This test requires a test-config.php file.');
-}
+Net_Gearman_Client::__call() should not trigger strict errors
 --FILE--
 <?php
 
-require_once dirname(__FILE__) . '/tests-config.php';
+require_once 'tests-config.php';
 require_once 'Net/Gearman/Client.php';
+
+// Full error reporting enabled
+error_reporting(E_ALL|E_STRICT);
+ini_set('display_errors', true);
 
 $gearman = new Net_Gearman_Client($servers);
 $res = $gearman->Sum(array(

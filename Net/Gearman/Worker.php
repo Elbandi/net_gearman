@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Interface for Danga's Gearman job scheduling system
  *
@@ -59,6 +58,7 @@ require_once 'Net/Gearman/Job.php';
  * @author    Joe Stump <joe@joestump.net> 
  * @copyright 2007-2008 Digg.com, Inc.
  * @license   http://www.opensource.org/licenses/bsd-license.php New BSD License
+ * @version   Release: @package_version@
  * @link      http://www.danga.com/gearman/
  * @see       Net_Gearman_Job, Net_Gearman_Connection
  */
@@ -85,6 +85,12 @@ class Net_Gearman_Worker
      */
     protected $abilities = array();
 
+    /**
+     * Parameters for job contructors, indexed by ability name
+     *
+     * @var array $initParams
+     */
+    protected $initParams = array();
     
     /**
      * Callbacks registered for this worker
@@ -129,9 +135,11 @@ class Net_Gearman_Worker
      * @throws Net_Gearman_Exception
      * @see Net_Gearman_Connection
      */
-    public function __construct($servers, $id = "")
+    public function __construct($servers = null, $id = "")
     {
-        if (!is_array($servers) && strlen($servers)) {
+        if (is_null($servers)){
+            $servers = array("localhost");
+        } elseif (!is_array($servers) && strlen($servers)) {
             $servers = array($servers);
         } elseif (is_array($servers) && !count($servers)) {
             throw new Net_Gearman_Exception('Invalid servers specified');
@@ -169,11 +177,12 @@ class Net_Gearman_Worker
      *
      * @param string  $ability Name of functcion/ability
      * @param integer $timeout How long to give this job
+     * @param array $initParams Parameters for job constructor
      *
      * @return void
      * @see Net_Gearman_Connection::send()
      */
-    public function addAbility($ability, $timeout = null)
+    public function addAbility($ability, $timeout = null, $initParams=array())
     {
         $call   = 'can_do';
         $params = array('func' => $ability);
@@ -181,6 +190,8 @@ class Net_Gearman_Worker
             $params['timeout'] = $timeout;
             $call              = 'can_do_timeout';
         }
+
+        $this->initParams[$ability] = $initParams;
         
         $this->abilities[$ability] = $timeout;
         
@@ -221,6 +232,7 @@ class Net_Gearman_Worker
             $currentTime = time();
             
             foreach ($this->conn as $server => $socket) {
+                $worked = false;
                 try {
                     $worked = $this->doWork($socket);
                 } catch (Net_Gearman_Exception $e) {
@@ -267,7 +279,9 @@ class Net_Gearman_Worker
             if ($retryChange === true) {
                 // broadcast all abilities to all servers
                 foreach ($this->abilities as $ability => $timeout) {
-                    $this->addAbility($ability, $timeout);
+                    $this->addAbility(
+                        $ability, $timeout, $this->initParams[$ability]
+                    );
                 }
             }
 
@@ -319,7 +333,9 @@ class Net_Gearman_Worker
             }
         }
 
-        $job = Net_Gearman_Job::factory($name, $socket, $handle);
+        $job = Net_Gearman_Job::factory(
+            $name, $socket, $handle, $this->initParams[$name]
+        );
         try {
             $this->start($handle, $name, $arg);
             $res = $job->run($arg); 
@@ -347,14 +363,17 @@ class Net_Gearman_Worker
      * @param integer  $type     Type of callback
      * 
      * @return void
-     * @throws Net_Gearman_Exception
+     * @throws Net_Gearman_Exception When an invalid callback is specified.
+     * @throws Net_Gearman_Exception When an invalid type is specified.
      */
     public function attachCallback($callback, $type = self::JOB_COMPLETE)
     {
         if (!is_callable($callback)) {
             throw new Net_Gearman_Exception('Invalid callback specified');
         }
-
+        if (!isset($this->callback[$type])) {
+            throw new Net_Gearman_Exception('Invalid callback type specified.');
+        }
         $this->callback[$type][] = $callback;
     }
 
@@ -369,7 +388,7 @@ class Net_Gearman_Worker
      */
     protected function start($handle, $job, $args)
     {
-        if (!count($this->callback[self::JOB_START])) {
+        if (count($this->callback[self::JOB_START]) == 0) {
             return; // No callbacks to run
         }
 
@@ -389,7 +408,7 @@ class Net_Gearman_Worker
      */
     protected function complete($handle, $job, array $result)
     {
-        if (!count($this->callback[self::JOB_COMPLETE])) {
+        if (count($this->callback[self::JOB_COMPLETE]) == 0) {
             return; // No callbacks to run
         }
 
@@ -409,7 +428,7 @@ class Net_Gearman_Worker
      */
     protected function fail($handle, $job, PEAR_Exception $error)
     {
-        if (!count($this->callback[self::JOB_FAIL])) {
+        if (count($this->callback[self::JOB_FAIL]) == 0) {
             return; // No callbacks to run
         }
 
@@ -451,5 +470,3 @@ class Net_Gearman_Worker
         return false;
     }
 }
-
-?>
