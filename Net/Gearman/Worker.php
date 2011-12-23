@@ -205,6 +205,27 @@ class Net_Gearman_Worker
     }
 
     /**
+     * Renounce an ability to the job server
+     *
+     * @param string  $ability Name of functcion/ability
+     *
+     * @return void
+     * @see Net_Gearman_Connection::send()
+     */
+    public function delAbility($ability)
+    {
+        $call   = 'cant_do';
+        $params = array('func' => $ability);
+
+        unset($this->initParams[$ability]);
+        unset($this->abilities[$ability]);
+
+        foreach ($this->conn as $conn) {
+            Net_Gearman_Connection::send($conn, $call, $params);
+        }
+    }
+
+    /**
      * Begin working
      *
      * This starts the worker on its journey of actually working. The first
