@@ -226,6 +226,24 @@ class Net_Gearman_Worker
     }
 
     /**
+     * Reset all ability to the job server
+     *
+     * @return void
+     * @see Net_Gearman_Connection::send()
+     */
+    public function resetAbility()
+    {
+        $call   = 'reset_abilities';
+
+        $this->initParams = array();
+        $this->abilities = array();
+
+        foreach ($this->conn as $conn) {
+            Net_Gearman_Connection::send($conn, $call);
+        }
+    }
+
+    /**
      * Begin working
      *
      * This starts the worker on its journey of actually working. The first
