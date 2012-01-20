@@ -115,6 +115,12 @@ class Net_Gearman_Worker
      */
     protected $id = "";
 
+    /**
+     * Socket return timeout
+     *
+     * @var int $socket_timeout
+     */
+    protected $socket_timeout = 10;
 
     /**
      * Callback types
@@ -132,14 +138,15 @@ class Net_Gearman_Worker
     /**
      * Constructor
      *
-     * @param array $servers List of servers to connect to
-     * @param string $id     Optional unique id for this worker
+     * @param array $servers        List of servers to connect to
+     * @param string $id            Optional unique id for this worker
+     * @param int $socket_timeout   Timout for the socket select
      * 
      * @return void
      * @throws Net_Gearman_Exception
      * @see Net_Gearman_Connection
      */
-    public function __construct($servers = null, $id = "")
+    public function __construct($servers = null, $id = "", $socket_timeout=null)
     {
         if (is_null($servers)){
             $servers = array("localhost");
@@ -154,6 +161,14 @@ class Net_Gearman_Worker
         }
 
         $this->id = $id;
+
+        if(!is_null($socket_timeout)){
+            if(is_numeric($socket_timeout)){
+                $this->socket_timeout = (int)$socket_timeout;
+            } else {
+                throw Net_Gearman_Exception("Invalid valid for socket timeout");
+            }
+        }
 
         foreach ($servers as $s) {
             try {
@@ -295,7 +310,7 @@ class Net_Gearman_Worker
                 }
 
                 $read = $this->conn;
-                socket_select($read, $write, $except, 60);
+                @socket_select($read, $write, $except, $this->socket_timeout);
                 $idle = (count($read) == 0);
             }
 
