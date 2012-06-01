@@ -317,6 +317,16 @@ class Net_Gearman_Client
     }
 
     /**
+     * Get a count of connections
+     *
+     * @return int Number of connections
+     */
+    public function getConnectionCount()
+    {
+      return count($this->conn);
+    }
+
+    /**
      * Disconnect from Gearman
      *
      * @return      void
