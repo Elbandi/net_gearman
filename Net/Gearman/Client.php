@@ -49,6 +49,13 @@ class Net_Gearman_Client
     protected $conn = array();
 
     /**
+     * Pool of retry connections
+     *
+     * @var array $conn
+     */
+    protected $retryConn = array();
+
+    /**
      * A list of Gearman servers
      *
      * @var array $servers A list of potential Gearman servers
@@ -88,19 +95,17 @@ class Net_Gearman_Client
             if(empty($server)){
                 throw new Net_Gearman_Exception('Invalid servers specified');
             }
-            $conn = null;
             try {
                 $conn = Net_Gearman_Connection::connect($server, $timeout);
             } catch (Net_Gearman_Exception $e) {
-                unset($this->servers[$key]);
-                continue;
+                $conn = null;
             }
             if (!Net_Gearman_Connection::isConnected($conn)) {
-                unset($this->servers[$key]);
+                $this->retryConn[$server] = time();
                 continue;
             }
 
-            $this->conn[] = $conn;
+            $this->conn[$server] = $conn;
         }
         if (empty($this->conn)) {
             throw new Net_Gearman_Exception(
@@ -115,9 +120,34 @@ class Net_Gearman_Client
      *
      * @return resource A connection to a Gearman server
      */
-    protected function getConnection()
+    protected function getConnection(&$server = null)
     {
-        return $this->conn[array_rand($this->conn)];
+        $sc = $this->getConnectionCount();
+        if ($sc == 0) {
+            return null;
+        }
+        if ($sc == 1) {
+            return reset($this->conn);
+        }
+        if (is_null($server)) {
+            return $this->conn[$server = array_rand($this->conn)];
+        }
+        return $this->conn[$server];
+    }
+
+    /**
+     * Get a Gearman server to connection
+     *
+     * @return string The server address if found, null if not
+     */
+    protected function getServerBySocket($socket)
+    {
+        foreach($this->conn as $server => $s) {
+            if ($s === $socket) {
+                return $server;
+            }
+        }
+        return null;
     }
 
     /**
@@ -143,6 +173,33 @@ class Net_Gearman_Client
         $set->addTask($task);
         $this->runSet($set);
         return $task->handle;
+    }
+
+    /**
+     * Get the status for a task from Gearman
+     *
+     * @param object $task Task status from Gearman
+     * 
+     * @return      boolean Returns true if request was sent, false if not
+     * @see         Net_Gearman_Task, Net_Gearman_Client::runSet()
+     */
+    protected function getStatus(Net_Gearman_Task $task)
+    {
+        $params = array(
+            'handle' => $task->handle,
+        );
+        if ($this->getConnectionCount() == 0) {
+            return false;
+        }
+        $s = $this->getConnection($task->server);
+        try {
+            Net_Gearman_Connection::send($s, 'get_status', $params);
+        } catch (Net_Gearman_Exception $e) {
+            unset($this->conn[$task->server]);
+            $this->retryConn[$task->server] = time();
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -190,14 +247,22 @@ class Net_Gearman_Client
             'arg'  => $arg
         );
 
-        $s = $this->getConnection();
-        Net_Gearman_Connection::send($s, $type, $params);
+        if ($this->getConnectionCount() == 0) return false;
+        $s = $this->getConnection($server = null);
+        try {
+            Net_Gearman_Connection::send($s, $type, $params);
 
-        if (!is_array(Net_Gearman_Connection::$waiting[(int)$s])) {
-            Net_Gearman_Connection::$waiting[(int)$s] = array();
+            if (!is_array(Net_Gearman_Connection::$waiting[(int)$s])) {
+                Net_Gearman_Connection::$waiting[(int)$s] = array();
+            }
+
+            array_push(Net_Gearman_Connection::$waiting[(int)$s], $task);
+        } catch (Net_Gearman_Exception $e) {
+            unset($this->conn[$server]);
+            $this->retryConn[$server] = time();
+            return false;
         }
-
-        array_push(Net_Gearman_Connection::$waiting[(int)$s], $task);
+        return true;
     }
 
     /**
@@ -214,6 +279,7 @@ class Net_Gearman_Client
         $totalTasks = $set->tasksCount;
         $taskKeys   = array_keys($set->tasks);
         $t          = 0;
+        $retryTime = 5;
 
         if ($timeout !== null){
             $socket_timeout = min(10, (int)$timeout);
@@ -221,7 +287,7 @@ class Net_Gearman_Client
             $socket_timeout = 10;
         }
 
-        $start = microtime(true);
+        $lastTime = $start = microtime(true);
         while (!$set->finished()) {
 
             $now = microtime(true);
@@ -231,26 +297,55 @@ class Net_Gearman_Client
 
             if ($t < $totalTasks) {
                 $k = $taskKeys[$t];
-                $this->submitTask($set->tasks[$k]);
-                if ($set->tasks[$k]->type == Net_Gearman_Task::JOB_BACKGROUND ||
-                    $set->tasks[$k]->type == Net_Gearman_Task::JOB_HIGH_BACKGROUND ||
-                    $set->tasks[$k]->type == Net_Gearman_Task::JOB_LOW_BACKGROUND) {
-
-                    $set->tasks[$k]->finished = true;
-                    $set->tasksCount--;
+                if ($this->submitTask($set->tasks[$k])) {
+                    $t++;
                 }
-
-                $t++;
             }
 
             $write  = null;
             $except = null;
-            $read   = $this->conn;
-            socket_select($read, $write, $except, $socket_timeout);
+            $read   = array_values($this->conn);
+            @socket_select($read, $write, $except, $socket_timeout);
             foreach ($read as $socket) {
-                $resp = Net_Gearman_Connection::read($socket);
-                if (count($resp)) {
-                    $this->handleResponse($resp, $socket, $set);
+                try {
+                    $resp = Net_Gearman_Connection::read($socket);
+                    if (count($resp)) {
+                        $this->handleResponse($resp, $socket, $set);
+                    }
+                } catch (Net_Gearman_Exception $e) {
+                    $server = $this->getServerBySocket($socket);
+                    unset($this->conn[$server]);
+                    $this->retryConn[$server] = time();
+                }
+            }
+
+            $currentTime = time();
+            foreach ($this->retryConn as $s => $lastTry) {
+                if (($lastTry + $retryTime) < $currentTime) {
+                    try {
+                        $conn = Net_Gearman_Connection::connect($s, $this->timeout);
+                        $this->conn[$s]         = $conn;
+                        unset($this->retryConn[$s]);
+                    } catch (Net_Gearman_Exception $e) {
+                        $this->retryConn[$s] = $currentTime;
+                    }
+                }
+            }
+
+            if ($this->getConnectionCount() == 0) {
+                // sleep to avoid wasted cpu cycles if no connections to block on using socket_select
+                sleep(1);
+            } else {
+                $currentTime = time();
+                if ($currentTime - $lastTime >= 5) {
+                    for($i = 0; $i < $t; $i++) {
+                        $k = $taskKeys[$i];
+                        $task = $set->tasks[$k];
+                        if (!$task->finished && !empty($task->server)) {
+                            $this->getStatus($task);
+                        }
+                    }
+                    $lastTime = $currentTime;
                 }
             }
         }
@@ -287,12 +382,26 @@ class Net_Gearman_Client
             $tasks->tasksCount--;
             $task->fail();
             break;
+        case 'status_res':
+            if ((int)$resp['data']['known'] != 1) { // task not known
+                $task->finished = true;
+                $tasks->tasksCount--;
+            } else {
+                $n = (int)$resp['data']['numerator'];
+                $d = (int)$resp['data']['denominator'];
+                $task->status($n, $d);
+            }
+            break;
         case 'job_created':
             $task         = array_shift(Net_Gearman_Connection::$waiting[(int)$s]);
             $task->handle = $resp['data']['handle'];
-            if ($task->type == Net_Gearman_Task::JOB_BACKGROUND) {
+            if ($task->type == Net_Gearman_Task::JOB_BACKGROUND ||
+                $task->type == Net_Gearman_Task::JOB_HIGH_BACKGROUND ||
+                $task->type == Net_Gearman_Task::JOB_LOW_BACKGROUND) {
                 $task->finished = true;
+                $tasks->tasksCount--;
             }
+            $task->server = $this->getServerBySocket($s);
             $tasks->handles[$task->handle] = $task->uniq;
             break;
         case 'error':

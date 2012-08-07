@@ -75,6 +75,14 @@ class Net_Gearman_Task
     public $handle = '';
 
     /**
+     * Job Server
+     *
+     * @var string $server
+     * @see Net_Gearman_Client
+     */
+    public $server = null;
+
+    /**
      * The unique identifier for this job
      *
      * Keep in mind that a unique job is only unique to the job server it is 
