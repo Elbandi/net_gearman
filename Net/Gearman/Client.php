@@ -221,25 +221,13 @@ class Net_Gearman_Client
             $socket_timeout = 10;
         }
 
+        $start = microtime(true);
         while (!$set->finished()) {
 
-            if ($timeout !== null) {
-
-                if (empty($start)) {
-
-                    $start = microtime(true);
-
-                } else {
-
-                    $now = microtime(true);
-
-                    if ($now - $start >= $timeout) {
-                        break;
-                    }
-                }
-
+            $now = microtime(true);
+            if (($timeout !== null) && ($now - $start >= $timeout)) {
+                break;
             }
-
 
             if ($t < $totalTasks) {
                 $k = $taskKeys[$t];
